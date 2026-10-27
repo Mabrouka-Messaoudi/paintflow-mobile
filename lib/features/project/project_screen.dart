@@ -9,9 +9,11 @@ import '../../core/app_theme.dart';
 import '../../core/format.dart';
 import '../../core/widgets/ui.dart';
 import '../../data/client_summary.dart';
+import '../../data/clients_repository.dart';
 import '../../data/payment.dart';
 import '../../data/project_repository.dart';
 import '../../data/purchase.dart';
+import '../admin/add_client_sheet.dart';
 import '../auth/auth_service.dart';
 import 'add_payment_sheet.dart';
 import 'add_purchase_sheet.dart';
@@ -84,6 +86,45 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
     }
   }
 
+  Future<void> _deleteClient(ProjectData data) async {
+    final c = data.client;
+    final ok = await _confirmDelete(
+      context,
+      title: 'حذف الحريف نهائياً؟',
+      message: 'سيتم حذف «${c.fullName}» مع '
+          '${data.payments.length} دفعات و${data.purchases.length} مشتريات وصورها'
+          '${c.hasAccount ? '، وحساب دخوله' : ''}.\n\nلا يمكن التراجع عن هذا.',
+    );
+    if (!ok || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    final rootNav = Navigator.of(context, rootNavigator: true);
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      ),
+    );
+    try {
+      final warning =
+          await ref.read(clientsRepositoryProvider).deleteClient(c.id);
+      rootNav.pop(); // progress dialog
+      router.pop(); // back to the clients list
+      messenger.showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(warning ?? 'تم حذف «${c.fullName}»'),
+      ));
+    } catch (e) {
+      rootNav.pop();
+      messenger.showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(functionError(e, 'تعذّر حذف الحريف')),
+      ));
+    }
+  }
+
   Future<void> _deletePurchase(Purchase p) async {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _hidden.add(p.id));
@@ -132,7 +173,12 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
             parent: AlwaysScrollableScrollPhysics()),
         slivers: [
           SliverToBoxAdapter(
-            child: _Top(client: data.client, readOnly: widget.readOnly),
+            child: _Top(
+              client: data.client,
+              readOnly: widget.readOnly,
+              onEdit: () => showClientFormSheet(context, client: data.client),
+              onDelete: () => _deleteClient(data),
+            ),
           ),
           if (!widget.readOnly && !data.client.hasAccount)
             SliverToBoxAdapter(
@@ -397,10 +443,17 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
 }
 
 class _Top extends StatelessWidget {
-  const _Top({required this.client, required this.readOnly});
+  const _Top({
+    required this.client,
+    required this.readOnly,
+    this.onEdit,
+    this.onDelete,
+  });
 
   final ClientSummary client;
   final bool readOnly;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -487,6 +540,52 @@ class _Top extends StatelessWidget {
                           launchUrl(Uri(scheme: 'tel', path: c.phone)),
                     ),
                   ),
+                if (!readOnly) ...[
+                  const SizedBox(width: 8),
+                  Material(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.14)),
+                    ),
+                    child: PopupMenuButton<String>(
+                      tooltip: 'خيارات',
+                      icon: const Icon(Icons.more_vert_rounded,
+                          color: Colors.white),
+                      color: Colors.white,
+                      position: PopupMenuPosition.under,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      onSelected: (v) =>
+                          v == 'edit' ? onEdit?.call() : onDelete?.call(),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, color: AppColors.ink),
+                              SizedBox(width: 10),
+                              Text('تعديل البيانات'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline_rounded,
+                                  color: Color(0xFFB42318)),
+                              SizedBox(width: 10),
+                              Text('حذف الحريف',
+                                  style: TextStyle(color: Color(0xFFB42318))),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

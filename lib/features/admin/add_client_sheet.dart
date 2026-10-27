@@ -4,10 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_theme.dart';
+import '../../core/format.dart';
 import '../../data/client_summary.dart';
 import '../../data/clients_repository.dart';
 
-Future<void> showAddClientSheet(BuildContext context) {
+Future<void> showAddClientSheet(BuildContext context) =>
+    showClientFormSheet(context);
+
+/// Add a new client, or edit [client] when given.
+Future<void> showClientFormSheet(BuildContext context,
+    {ClientSummary? client}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -17,26 +23,31 @@ Future<void> showAddClientSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (_) => const _AddClientSheet(),
+    builder: (_) => _ClientFormSheet(client: client),
   );
 }
 
-class _AddClientSheet extends ConsumerStatefulWidget {
-  const _AddClientSheet();
+class _ClientFormSheet extends ConsumerStatefulWidget {
+  const _ClientFormSheet({this.client});
+
+  final ClientSummary? client;
 
   @override
-  ConsumerState<_AddClientSheet> createState() => _AddClientSheetState();
+  ConsumerState<_ClientFormSheet> createState() => _ClientFormSheetState();
 }
 
-class _AddClientSheetState extends ConsumerState<_AddClientSheet> {
+class _ClientFormSheetState extends ConsumerState<_ClientFormSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _phone = TextEditingController();
-  final _address = TextEditingController();
-  final _amount = TextEditingController();
-  ClientStatus _status = ClientStatus.todo;
+  late final _name = TextEditingController(text: widget.client?.fullName);
+  late final _phone = TextEditingController(text: widget.client?.phone);
+  late final _address = TextEditingController(text: widget.client?.address);
+  late final _amount = TextEditingController(
+      text: widget.client == null ? '' : qty(widget.client!.agreedAmount));
+  late ClientStatus _status = widget.client?.status ?? ClientStatus.todo;
   bool _saving = false;
   String? _error;
+
+  bool get _isEdit => widget.client != null;
 
   @override
   void dispose() {
@@ -60,18 +71,30 @@ class _AddClientSheetState extends ConsumerState<_AddClientSheet> {
     });
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    final repo = ref.read(clientsRepositoryProvider);
     try {
-      await ref.read(clientsRepositoryProvider).createClient(
-            fullName: _name.text.trim(),
-            phone: _orNull(_phone.text),
-            address: _orNull(_address.text),
-            agreedAmount: _parseAmount(_amount.text)!,
-            status: _status,
-          );
+      if (_isEdit) {
+        await repo.updateClient(
+          id: widget.client!.id,
+          fullName: _name.text.trim(),
+          phone: _orNull(_phone.text),
+          address: _orNull(_address.text),
+          agreedAmount: _parseAmount(_amount.text)!,
+          status: _status,
+        );
+      } else {
+        await repo.createClient(
+          fullName: _name.text.trim(),
+          phone: _orNull(_phone.text),
+          address: _orNull(_address.text),
+          agreedAmount: _parseAmount(_amount.text)!,
+          status: _status,
+        );
+      }
       navigator.pop();
-      messenger.showSnackBar(const SnackBar(
+      messenger.showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text('تمت إضافة الحريف ✅'),
+        content: Text(_isEdit ? 'تم حفظ التعديلات ✅' : 'تمت إضافة الحريف ✅'),
       ));
     } on PostgrestException catch (e) {
       setState(() => _error = 'تعذّر الحفظ: ${e.message}');
@@ -85,6 +108,10 @@ class _AddClientSheetState extends ConsumerState<_AddClientSheet> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
+    final received = widget.client?.received ?? 0;
+    final newAgreed = _parseAmount(_amount.text);
+    final belowReceived =
+        _isEdit && newAgreed != null && newAgreed < received;
 
     Widget field(String label, Widget input) => Padding(
           padding: const EdgeInsets.only(bottom: 14),
@@ -113,10 +140,14 @@ class _AddClientSheetState extends ConsumerState<_AddClientSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('حريف جديد', style: t.titleLarge),
+              Text(_isEdit ? 'تعديل بيانات الحريف' : 'حريف جديد',
+                  style: t.titleLarge),
               const SizedBox(height: 4),
-              const Text('أدخل بيانات الحريف ومشروعه',
-                  style: TextStyle(color: AppColors.muted)),
+              Text(
+                  _isEdit
+                      ? 'التغييرات تظهر مباشرة عند الحريف'
+                      : 'أدخل بيانات الحريف ومشروعه',
+                  style: const TextStyle(color: AppColors.muted)),
               const SizedBox(height: 18),
               field(
                 'اسم الحريف',
@@ -150,6 +181,7 @@ class _AddClientSheetState extends ConsumerState<_AddClientSheet> {
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   textDirection: TextDirection.ltr,
+                  onChanged: (_) => setState(() {}),
                   validator: (v) {
                     final n = _parseAmount(v);
                     if (n == null) return 'أدخل مبلغاً صحيحاً';
@@ -157,6 +189,21 @@ class _AddClientSheetState extends ConsumerState<_AddClientSheet> {
                     return null;
                   },
                 ),
+              ),
+              AnimatedSize(
+                duration: 250.ms,
+                curve: Curves.easeOutCubic,
+                child: belowReceived
+                    ? Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Text(
+                          'تنبيه: المبلغ أقل مما استلمته (${money(received)})، فسيصبح المتبقي سالباً.',
+                          style: const TextStyle(
+                              color: Color(0xFFB54708),
+                              fontWeight: FontWeight.w600),
+                        ),
+                      )
+                    : const SizedBox(width: double.infinity),
               ),
               field(
                 'الحالة',
@@ -203,7 +250,8 @@ class _AddClientSheetState extends ConsumerState<_AddClientSheet> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2.5, color: Colors.white),
                         )
-                      : const Text('حفظ الحريف', key: ValueKey('label')),
+                      : Text(_isEdit ? 'حفظ التعديلات' : 'حفظ الحريف',
+                          key: const ValueKey('label')),
                 ),
               ),
             ],

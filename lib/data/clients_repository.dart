@@ -75,9 +75,47 @@ class ClientsRepository {
       'status': status.value,
     });
   }
+
+  Future<void> updateClient({
+    required String id,
+    required String fullName,
+    String? phone,
+    String? address,
+    required double agreedAmount,
+    required ClientStatus status,
+  }) async {
+    await _db.from('clients').update({
+      'full_name': fullName,
+      'phone': phone,
+      'address': address,
+      'agreed_amount': agreedAmount,
+      'status': status.value,
+    }).eq('id', id);
+  }
+}
+
+/// Readable Arabic message from an Edge Function error.
+String functionError(Object e, String fallback) {
+  if (e is FunctionException) {
+    final d = e.details;
+    if (d is Map && d['error'] != null) return d['error'].toString();
+    return '$fallback (${e.status})';
+  }
+  return 'تعذّر الاتصال، تحقّق من الإنترنت';
 }
 
 extension ClientAccounts on ClientsRepository {
+  /// Deletes the client, their payments, purchases, photos and login
+  /// (`delete-client` Edge Function). Returns a warning, if any.
+  Future<String?> deleteClient(String id) async {
+    final res = await _db.functions.invoke(
+      'delete-client',
+      body: {'client_id': id},
+    );
+    final data = res.data;
+    return data is Map ? data['warning'] as String? : null;
+  }
+
   /// Calls the `create-client-account` Edge Function (admin only).
   Future<void> createAccount({
     required String clientId,
