@@ -456,7 +456,15 @@ class _Top extends StatelessWidget {
                               fontSize: 13, color: Color(0xFFA9B4C6)),
                         ),
                       const SizedBox(height: 6),
-                      StatusPill(status: c.status),
+                      Row(
+                        children: [
+                          StatusPill(status: c.status),
+                          if (readOnly) ...[
+                            const SizedBox(width: 6),
+                            const _LivePill(),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -488,6 +496,42 @@ class _Top extends StatelessWidget {
                   curve: Curves.easeOutCubic),
         ),
       ],
+    );
+  }
+}
+
+/// "محدّث مباشرة" badge with a pulsing dot (client view).
+class _LivePill extends StatelessWidget {
+  const _LivePill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF34D399).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(
+                color: Color(0xFF34D399), shape: BoxShape.circle),
+          )
+              .animate(onPlay: (c) => c.repeat(reverse: true))
+              .scaleXY(begin: 0.7, end: 1.3, duration: 900.ms)
+              .fade(begin: 0.5, end: 1, duration: 900.ms),
+          const SizedBox(width: 6),
+          const Text('محدّث مباشرة',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6EE7B7))),
+        ],
+      ),
     );
   }
 }
