@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/admin/client_detail_placeholder.dart';
+import '../data/client_summary.dart';
 import '../features/admin/clients_screen.dart';
+import '../features/project/project_screen.dart';
 import '../features/auth/auth_service.dart';
 import '../features/auth/login_screen.dart';
 import '../features/client/client_home_screen.dart';
@@ -41,8 +42,10 @@ final appRouter = GoRouter(
       routes: [
         GoRoute(
           path: 'clients/:id',
-          builder: (context, state) =>
-              ClientDetailPlaceholder(clientId: state.pathParameters['id']!),
+          builder: (context, state) => ProjectScreen(
+            clientId: state.pathParameters['id']!,
+            initial: state.extra as ClientSummary?,
+          ),
         ),
       ],
     ),

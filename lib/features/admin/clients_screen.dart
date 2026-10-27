@@ -83,7 +83,8 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> {
                               child: ClientCard(
                                 client: c,
                                 onTap: () =>
-                                    context.push('/admin/clients/${c.id}'),
+                                    context.push('/admin/clients/${c.id}',
+                                        extra: c),
                               )
                                   .animate(delay: (70 * i.clamp(0, 8)).ms)
                                   .fadeIn(duration: 450.ms)

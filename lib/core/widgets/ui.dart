@@ -200,6 +200,32 @@ class StatusPill extends StatelessWidget {
   }
 }
 
+/// Number that counts up on first show and glides to new values.
+class CountUpText extends StatelessWidget {
+  const CountUpText({
+    super.key,
+    required this.value,
+    required this.format,
+    this.style,
+    this.duration = const Duration(milliseconds: 1200),
+  });
+
+  final double value;
+  final String Function(double) format;
+  final TextStyle? style;
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: value),
+      duration: duration,
+      curve: Curves.easeOutQuart,
+      builder: (context, v, _) => Text(format(v), style: style),
+    );
+  }
+}
+
 /// Progress bar that fills smoothly and animates to new values.
 class AnimatedProgressBar extends StatelessWidget {
   const AnimatedProgressBar({super.key, required this.value, this.height = 8});
