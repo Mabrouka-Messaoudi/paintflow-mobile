@@ -77,6 +77,20 @@ class ClientsRepository {
   }
 }
 
+extension ClientAccounts on ClientsRepository {
+  /// Calls the `create-client-account` Edge Function (admin only).
+  Future<void> createAccount({
+    required String clientId,
+    required String email,
+    required String password,
+  }) async {
+    await _db.functions.invoke(
+      'create-client-account',
+      body: {'client_id': clientId, 'email': email, 'password': password},
+    );
+  }
+}
+
 final clientsRepositoryProvider = Provider<ClientsRepository>(
   (ref) => ClientsRepository(Supabase.instance.client),
 );

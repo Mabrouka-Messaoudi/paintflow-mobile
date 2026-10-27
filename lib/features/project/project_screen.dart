@@ -15,6 +15,7 @@ import '../../data/purchase.dart';
 import '../auth/auth_service.dart';
 import 'add_payment_sheet.dart';
 import 'add_purchase_sheet.dart';
+import 'create_account_sheet.dart';
 import 'purchase_widgets.dart';
 
 /// One client's project: amounts, payments and (later) purchases.
@@ -133,6 +134,12 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
           SliverToBoxAdapter(
             child: _Top(client: data.client, readOnly: widget.readOnly),
           ),
+          if (!widget.readOnly && !data.client.hasAccount)
+            SliverToBoxAdapter(
+              child: _AccountBanner(
+                onCreate: () => showCreateAccountSheet(context, data.client),
+              ),
+            ),
           SliverToBoxAdapter(
             child: _Tabs(
               index: _tab,
@@ -497,6 +504,68 @@ class _Top extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Shown to the painter when the client has no login yet.
+class _AccountBanner extends StatelessWidget {
+  const _AccountBanner({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFBFDBFE)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFDBEAFE),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.person_add_alt_1_rounded,
+                  color: Color(0xFF1D4ED8), size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('الحريف لا يملك حساباً بعد',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  Text('أنشئ له حساباً ليتابع حضيرته من هاتفه',
+                      style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                backgroundColor: const Color(0xFF1D4ED8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: onCreate,
+              child: const Text('إنشاء'),
+            ),
+          ],
+        ),
+      ),
+    ).animate(delay: 250.ms).fadeIn(duration: 400.ms).slideY(
+        begin: 0.2, end: 0, duration: 500.ms, curve: Curves.easeOutCubic);
   }
 }
 
