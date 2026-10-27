@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/admin/admin_home_screen.dart';
+import '../features/admin/client_detail_placeholder.dart';
+import '../features/admin/clients_screen.dart';
 import '../features/auth/auth_service.dart';
 import '../features/auth/login_screen.dart';
 import '../features/client/client_home_screen.dart';
@@ -34,7 +35,17 @@ final appRouter = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (context, state) => const _SplashScreen()),
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-    GoRoute(path: '/admin', builder: (context, state) => const AdminHomeScreen()),
+    GoRoute(
+      path: '/admin',
+      builder: (context, state) => const ClientsScreen(),
+      routes: [
+        GoRoute(
+          path: 'clients/:id',
+          builder: (context, state) =>
+              ClientDetailPlaceholder(clientId: state.pathParameters['id']!),
+        ),
+      ],
+    ),
     GoRoute(path: '/client', builder: (context, state) => const ClientHomeScreen()),
   ],
 );
