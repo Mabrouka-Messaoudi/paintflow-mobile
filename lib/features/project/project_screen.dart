@@ -11,8 +11,11 @@ import '../../core/widgets/ui.dart';
 import '../../data/client_summary.dart';
 import '../../data/payment.dart';
 import '../../data/project_repository.dart';
+import '../../data/purchase.dart';
 import '../auth/auth_service.dart';
 import 'add_payment_sheet.dart';
+import 'add_purchase_sheet.dart';
+import 'purchase_widgets.dart';
 
 /// One client's project: amounts, payments and (later) purchases.
 /// [readOnly] = the client's own view (no add / delete).
@@ -36,13 +39,13 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
   int _tab = 0;
   final _hidden = <String>{}; // payments removed optimistically
 
-  Future<bool> _confirmDelete(BuildContext context, Payment p) async {
+  Future<bool> _confirmDelete(BuildContext context,
+      {required String title, required String message}) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('حذف الدفعة؟'),
-        content: Text(
-            'سيتم حذف ${money(p.amount)} وتحديث المبلغ المستلم والمتبقي.'),
+        title: Text(title),
+        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -80,13 +83,31 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
     }
   }
 
+  Future<void> _deletePurchase(Purchase p) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _hidden.add(p.id));
+    try {
+      await ref.read(projectRepositoryProvider).deletePurchase(p);
+      messenger.showSnackBar(const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('تم حذف الشراء'),
+      ));
+    } catch (_) {
+      if (mounted) setState(() => _hidden.remove(p.id));
+      messenger.showSnackBar(const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('تعذّر حذف الشراء'),
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(projectProvider(widget.clientId));
     final data = async.value ??
         (widget.initial == null
             ? null
-            : ProjectData(widget.initial!, const []));
+            : ProjectData(widget.initial!, const [], const [], const {}));
     final loadingPayments = async.value == null && !async.hasError;
 
     if (data == null) {
@@ -101,6 +122,8 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
 
     final payments =
         data.payments.where((p) => !_hidden.contains(p.id)).toList();
+    final purchases =
+        data.purchases.where((p) => !_hidden.contains(p.id)).toList();
 
     return Scaffold(
       body: CustomScrollView(
@@ -114,20 +137,24 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
             child: _Tabs(
               index: _tab,
               paymentsCount: payments.length,
+              purchasesCount: purchases.length,
               onChanged: (i) => setState(() => _tab = i),
             ),
           ),
           if (_tab == 0)
             ..._paymentSlivers(payments, loadingPayments)
           else
-            const SliverToBoxAdapter(child: _ComingSoon()),
+            ..._purchaseSlivers(purchases, data.imageUrls, loadingPayments),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),
       bottomNavigationBar: widget.readOnly
           ? null
           : _BottomBar(
-              onPressed: () => showAddPaymentSheet(context, data.client),
+              label: _tab == 0 ? 'إضافة دفعة' : 'إضافة شراء',
+              onPressed: () => _tab == 0
+                  ? showAddPaymentSheet(context, data.client)
+                  : showAddPurchaseSheet(context, data.client),
             ),
     );
   }
@@ -204,7 +231,12 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
                 : Dismissible(
                     key: ValueKey(p.id),
                     direction: DismissDirection.endToStart,
-                    confirmDismiss: (_) => _confirmDelete(context, p),
+                    confirmDismiss: (_) => _confirmDelete(
+                      context,
+                      title: 'حذف الدفعة؟',
+                      message:
+                          'سيتم حذف ${money(p.amount)} وتحديث المبلغ المستلم والمتبقي.',
+                    ),
                     onDismissed: (_) => _deletePayment(p),
                     background: Container(
                       alignment: AlignmentDirectional.centerEnd,
@@ -220,6 +252,127 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> {
                   );
             return KeyedSubtree(
               key: ValueKey('pay-${p.id}'),
+              child: child
+                  .animate(delay: (60 * i.clamp(0, 8)).ms)
+                  .fadeIn(duration: 400.ms)
+                  .slideY(
+                      begin: 0.15,
+                      end: 0,
+                      duration: 500.ms,
+                      curve: Curves.easeOutCubic),
+            );
+          },
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _purchaseSlivers(
+      List<Purchase> purchases, Map<String, String> urls, bool loading) {
+    if (loading) {
+      return [
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverList.separated(
+            itemCount: 3,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemBuilder: (_, _) => Container(
+              height: 88,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+            )
+                .animate(onPlay: (c) => c.repeat())
+                .shimmer(duration: 1200.ms, color: const Color(0xFFEEF0F4)),
+          ),
+        ),
+      ];
+    }
+
+    if (purchases.isEmpty) {
+      return [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(32, 40, 32, 0),
+            child: Column(
+              children: [
+                Icon(Icons.receipt_long_outlined,
+                    size: 56, color: AppColors.muted.withValues(alpha: 0.5)),
+                const SizedBox(height: 12),
+                const Text('لا توجد مشتريات بعد',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                Text(
+                  widget.readOnly
+                      ? 'ستظهر هنا مشتريات الدهان مع صور الفواتير'
+                      : 'اضغط على «إضافة شراء» لتسجيل أول فاتورة',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.muted),
+                ),
+              ],
+            ),
+          ).animate().fadeIn(duration: 400.ms),
+        ),
+      ];
+    }
+
+    final total = purchases.fold<double>(0, (s, p) => s + p.total);
+
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+        sliver: SliverToBoxAdapter(
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text('قائمة المشتريات',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text('المجموع: ${money(total)}',
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF78350F))),
+              ),
+            ],
+          ),
+        ),
+      ),
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverList.separated(
+          itemCount: purchases.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (context, i) {
+            final p = purchases[i];
+            final tile = PurchaseTile(purchase: p, urls: urls);
+            final Widget child = widget.readOnly
+                ? tile
+                : Dismissible(
+                    key: ValueKey(p.id),
+                    direction: DismissDirection.endToStart,
+                    confirmDismiss: (_) => _confirmDelete(
+                      context,
+                      title: 'حذف هذا الشراء؟',
+                      message:
+                          'سيتم حذف «${p.itemName}» (${money(p.total)}) مع صوره.',
+                    ),
+                    onDismissed: (_) => _deletePurchase(p),
+                    background: deleteBackground(),
+                    child: tile,
+                  );
+            return KeyedSubtree(
+              key: ValueKey('buy-${p.id}'),
               child: child
                   .animate(delay: (60 * i.clamp(0, 8)).ms)
                   .fadeIn(duration: 400.ms)
@@ -518,10 +671,12 @@ class _Tabs extends StatelessWidget {
   const _Tabs(
       {required this.index,
       required this.paymentsCount,
+      required this.purchasesCount,
       required this.onChanged});
 
   final int index;
   final int paymentsCount;
+  final int purchasesCount;
   final ValueChanged<int> onChanged;
 
   @override
@@ -585,7 +740,7 @@ class _Tabs extends StatelessWidget {
                   children: [
                     tab('الدفعات · $paymentsCount', 0),
                     const SizedBox(width: 4),
-                    tab('المشتريات', 1),
+                    tab('المشتريات · $purchasesCount', 1),
                   ],
                 ),
               ],
@@ -666,8 +821,9 @@ class _PaymentTile extends StatelessWidget {
 }
 
 class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.onPressed});
+  const _BottomBar({required this.label, required this.onPressed});
 
+  final String label;
   final VoidCallback onPressed;
 
   @override
@@ -684,31 +840,23 @@ class _BottomBar extends StatelessWidget {
           child: FilledButton.icon(
             onPressed: onPressed,
             icon: const Icon(Icons.add_rounded),
-            label: const Text('إضافة دفعة'),
+            label: AnimatedSwitcher(
+              duration: 250.ms,
+              transitionBuilder: (child, anim) => FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween(
+                          begin: const Offset(0, 0.5), end: Offset.zero)
+                      .animate(anim),
+                  child: child,
+                ),
+              ),
+              child: Text(label, key: ValueKey(label)),
+            ),
           ),
         ),
       ),
     );
-  }
-}
-
-class _ComingSoon extends StatelessWidget {
-  const _ComingSoon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 48, 32, 0),
-      child: Column(
-        children: [
-          Icon(Icons.receipt_long_outlined,
-              size: 56, color: AppColors.muted.withValues(alpha: 0.5)),
-          const SizedBox(height: 12),
-          const Text('المشتريات في الخطوة 7',
-              style: TextStyle(fontSize: 16, color: AppColors.muted)),
-        ],
-      ),
-    ).animate().fadeIn(duration: 300.ms);
   }
 }
 

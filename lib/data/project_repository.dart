@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -6,19 +8,27 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/format.dart';
 import 'client_summary.dart';
 import 'payment.dart';
+import 'purchase.dart';
+
+const _bucket = 'receipts';
 
 /// Everything one project screen needs.
 class ProjectData {
-  const ProjectData(this.client, this.payments);
+  const ProjectData(this.client, this.payments, this.purchases, this.imageUrls);
 
   final ClientSummary client;
   final List<Payment> payments;
+  final List<Purchase> purchases;
+
+  /// Storage path -> temporary signed URL (the bucket is private).
+  final Map<String, String> imageUrls;
 }
 
 class ProjectRepository {
   ProjectRepository(this._db);
 
   final SupabaseClient _db;
+  final _random = Random();
 
   Future<ProjectData> fetch(String clientId) async {
     final results = await Future.wait<dynamic>([
@@ -29,12 +39,41 @@ class ProjectRepository {
           .eq('client_id', clientId)
           .order('paid_at', ascending: false)
           .order('created_at', ascending: false),
+      _db
+          .from('purchases')
+          .select()
+          .eq('client_id', clientId)
+          .order('purchased_at', ascending: false)
+          .order('created_at', ascending: false),
     ]);
+
     final client = ClientSummary.fromMap(results[0] as Map<String, dynamic>);
     final payments = (results[1] as List)
         .map((m) => Payment.fromMap(m as Map<String, dynamic>))
         .toList();
-    return ProjectData(client, payments);
+    final purchases = (results[2] as List)
+        .map((m) => Purchase.fromMap(m as Map<String, dynamic>))
+        .toList();
+
+    final paths = purchases
+        .expand((p) => [p.receiptPath, p.itemPhotoPath])
+        .whereType<String>()
+        .toList();
+    // One signed URL per photo, in parallel. A missing file is skipped
+    // instead of failing the whole screen.
+    final signed = await Future.wait(paths.map((path) async {
+      try {
+        final url =
+            await _db.storage.from(_bucket).createSignedUrl(path, 60 * 60);
+        return MapEntry(path, url);
+      } catch (_) {
+        return null;
+      }
+    }));
+    final urls = Map<String, String>.fromEntries(
+        signed.whereType<MapEntry<String, String>>());
+
+    return ProjectData(client, payments, purchases, urls);
   }
 
   /// Emits the project, then re-emits it on every relevant change (Realtime).
@@ -92,6 +131,8 @@ class ProjectRepository {
     return controller.stream;
   }
 
+  // ---------- Payments ----------
+
   Future<void> addPayment({
     required String clientId,
     required double amount,
@@ -110,6 +151,73 @@ class ProjectRepository {
 
   Future<void> deletePayment(String id) async {
     await _db.from('payments').delete().eq('id', id);
+  }
+
+  // ---------- Purchases ----------
+
+  Future<String> _upload(String clientId, Uint8List bytes, String kind) async {
+    final path =
+        '$clientId/${kind}_${DateTime.now().microsecondsSinceEpoch}_${_random.nextInt(1000000)}.jpg';
+    await _db.storage.from(_bucket).uploadBinary(
+          path,
+          bytes,
+          fileOptions: const FileOptions(contentType: 'image/jpeg'),
+        );
+    return path;
+  }
+
+  Future<void> addPurchase({
+    required String clientId,
+    required String itemName,
+    required double quantity,
+    required double unitPrice,
+    String? shopName,
+    required DateTime purchasedAt,
+    Uint8List? receiptBytes,
+    Uint8List? itemPhotoBytes,
+  }) async {
+    final uploads = await Future.wait([
+      receiptBytes == null
+          ? Future<String?>.value(null)
+          : _upload(clientId, receiptBytes, 'receipt'),
+      itemPhotoBytes == null
+          ? Future<String?>.value(null)
+          : _upload(clientId, itemPhotoBytes, 'item'),
+    ]);
+    final receiptPath = uploads[0];
+    final itemPhotoPath = uploads[1];
+
+    try {
+      await _db.from('purchases').insert({
+        'client_id': clientId,
+        'item_name': itemName,
+        'quantity': quantity,
+        'unit_price': unitPrice,
+        'shop_name': shopName,
+        'purchased_at': isoDate(purchasedAt),
+        'receipt_path': receiptPath,
+        'item_photo_path': itemPhotoPath,
+      });
+    } catch (_) {
+      // Don't leave orphan photos in storage if the row failed.
+      final orphans = [receiptPath, itemPhotoPath].whereType<String>().toList();
+      if (orphans.isNotEmpty) {
+        await _db.storage.from(_bucket).remove(orphans);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deletePurchase(Purchase p) async {
+    await _db.from('purchases').delete().eq('id', p.id);
+    final paths = [p.receiptPath, p.itemPhotoPath].whereType<String>().toList();
+    if (paths.isNotEmpty) {
+      try {
+        await _db.storage.from(_bucket).remove(paths);
+      } catch (_) {
+        // The row is gone; a leftover file is harmless.
+      }
+    }
   }
 }
 

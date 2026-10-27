@@ -5,6 +5,10 @@ final _money = NumberFormat('#,##0.###', 'en_US');
 /// 12000 -> "12,000 د.ت"
 String money(num value) => '${_money.format(value)} د.ت';
 
+/// 4.0 -> "4", 2.5 -> "2.5"
+String qty(num q) =>
+    q == q.roundToDouble() ? q.toInt().toString() : q.toString();
+
 /// Tunisian month names.
 const _months = [
   'جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان',
