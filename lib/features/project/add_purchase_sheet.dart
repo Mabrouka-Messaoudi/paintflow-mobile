@@ -174,7 +174,7 @@ class _AddPurchaseSheetState extends ConsumerState<_AddPurchaseSheet> {
             children: [
               Text('شراء جديد', style: t.titleLarge),
               const SizedBox(height: 2),
-              Text('حضيرة ${widget.client.fullName}',
+              Text('شانطي ${widget.client.fullName}',
                   style: const TextStyle(color: AppColors.muted)),
               const SizedBox(height: 18),
               Row(

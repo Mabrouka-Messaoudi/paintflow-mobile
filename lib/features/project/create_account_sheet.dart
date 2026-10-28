@@ -84,7 +84,7 @@ class _CreateAccountSheetState extends ConsumerState<_CreateAccountSheet> {
   }
 
   String get _message => 'مرحباً ${widget.client.fullName}،\n'
-      'يمكنك متابعة حضيرتك (المبالغ، الدفعات، المشتريات والفواتير) على تطبيق PaintFlow.\n\n'
+      'يمكنك متابعة الشانطي (المبالغ، الدفعات، المشتريات والفواتير) على تطبيق PaintFlow.\n\n'
       'البريد الإلكتروني: ${_email.text.trim().toLowerCase()}\n'
       'كلمة السر: $_password';
 
@@ -144,7 +144,7 @@ class _CreateAccountSheetState extends ConsumerState<_CreateAccountSheet> {
         children: [
           Text('حساب للحريف', style: t.titleLarge),
           const SizedBox(height: 2),
-          Text('ليتابع ${widget.client.fullName} حضيرته من هاتفه',
+          Text('ليتابع ${widget.client.fullName} الشانطي من هاتفه',
               style: const TextStyle(color: AppColors.muted)),
           const SizedBox(height: 18),
           const Text('البريد الإلكتروني', style: labelStyle),

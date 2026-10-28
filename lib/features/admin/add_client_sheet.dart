@@ -146,7 +146,7 @@ class _ClientFormSheetState extends ConsumerState<_ClientFormSheet> {
               Text(
                   _isEdit
                       ? 'التغييرات تظهر مباشرة عند الحريف'
-                      : 'أدخل بيانات الحريف ومشروعه',
+                      : 'أدخل بيانات الحريف والشانطي',
                   style: const TextStyle(color: AppColors.muted)),
               const SizedBox(height: 18),
               field(

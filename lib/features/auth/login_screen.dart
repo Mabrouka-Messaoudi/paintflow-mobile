@@ -17,8 +17,9 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _email = TextEditingController();
+  final _email = TextEditingController(text: AuthService.savedEmail);
   final _password = TextEditingController();
+  bool _remember = AuthService.rememberMe;
   bool _obscure = true;
   bool _loading = false;
   String? _error;
@@ -38,7 +39,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      await AuthService.signIn(_email.text.trim(), _password.text);
+      await AuthService.signIn(_email.text.trim(), _password.text,
+          remember: _remember);
       // The router redirects to the right home screen automatically.
     } on AuthException catch (e) {
       setState(() => _error = _translate(e.message));
@@ -140,6 +142,39 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               validator: (v) =>
                   (v == null || v.length < 6) ? 'كلمة السر قصيرة جداً' : null,
+            ),
+            const SizedBox(height: 6),
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => setState(() => _remember = !_remember),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: _remember,
+                        activeColor: AppColors.teal,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(5)),
+                        onChanged: (v) =>
+                            setState(() => _remember = v ?? true),
+                      ),
+                      const Text('تذكّرني',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 6),
+                      const Expanded(
+                        child: Text('(البقاء متصلاً على هذا الهاتف)',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.muted)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
             AnimatedSize(
               duration: 300.ms,
@@ -266,7 +301,7 @@ class _Hero extends StatelessWidget {
                   .slideY(begin: 0.4, end: 0, curve: Curves.easeOutCubic),
               const SizedBox(height: 6),
               Text(
-                'نظّم حضائرك، وتابع كل دينار',
+                'نظّم الشانطيات، وتابع كل دينار',
                 style: GoogleFonts.ibmPlexSansArabic(
                     fontSize: 15, color: const Color(0xFFC9D2DF)),
               )

@@ -33,15 +33,15 @@ class ClientHomeScreen extends ConsumerWidget {
       ),
       error: (e, _) => _Message(
         icon: Icons.wifi_off_rounded,
-        title: 'تعذّر تحميل حضيرتك',
+        title: 'تعذّر تحميل الشانطي',
         subtitle: 'تحقّق من الإنترنت ثم أعد المحاولة',
         onRetry: () => ref.invalidate(myClientIdProvider),
       ),
       data: (id) => id == null
           ? const _Message(
               icon: Icons.link_off_rounded,
-              title: 'حسابك غير مربوط بأي حضيرة',
-              subtitle: 'تواصل مع الدهان ليربط حسابك بمشروعك',
+              title: 'حسابك غير مربوط بأي شانطي',
+              subtitle: 'تواصل مع الدهان ليربط حسابك بالشانطي',
             )
           : ProjectScreen(clientId: id, readOnly: true),
     );

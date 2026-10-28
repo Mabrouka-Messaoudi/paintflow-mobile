@@ -643,7 +643,7 @@ class _AccountBanner extends StatelessWidget {
                   Text('الحريف لا يملك حساباً بعد',
                       style:
                           TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                  Text('أنشئ له حساباً ليتابع حضيرته من هاتفه',
+                  Text('أنشئ له حساباً ليتابع الشانطي من هاتفه',
                       style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 ],
               ),
@@ -1085,7 +1085,7 @@ class _ErrorBody extends StatelessWidget {
         children: [
           const Icon(Icons.wifi_off_rounded, size: 56, color: AppColors.muted),
           const SizedBox(height: 12),
-          const Text('تعذّر تحميل المشروع',
+          const Text('تعذّر تحميل الشانطي',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
           OutlinedButton.icon(

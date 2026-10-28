@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/app_theme.dart';
 import 'core/router.dart';
+import 'features/auth/auth_service.dart';
 
 const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const supabaseKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
@@ -12,6 +13,7 @@ const supabaseKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseKey);
+  await AuthService.init();
   runApp(const ProviderScope(child: PaintFlowApp()));
 }
 
