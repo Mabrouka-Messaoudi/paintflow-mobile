@@ -24,6 +24,58 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String? _error;
 
+  bool _bioAvailable = false; // phone has a fingerprint set up
+  String? _bioEmail; // fingerprint login already enabled for this account
+  bool _useBio = true; // "enable fingerprint" checkbox
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometrics();
+  }
+
+  Future<void> _loadBiometrics() async {
+    final available = await AuthService.biometricsAvailable();
+    final email = available ? await AuthService.biometricEmail() : null;
+    if (!mounted) return;
+    setState(() {
+      _bioAvailable = available;
+      _bioEmail = email;
+    });
+    // Fresh app start: ask for the fingerprint straight away.
+    if (email != null && !AuthService.justSignedOut) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _bioLogin());
+    }
+  }
+
+  Future<void> _bioLogin() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await AuthService.signInWithBiometrics();
+      // On success the router opens the right home screen.
+    } on AuthException {
+      setState(() {
+        _bioEmail = null;
+        _error = 'تغيّرت كلمة السر. ادخل بها مرة واحدة لتفعيل البصمة من جديد';
+      });
+    } catch (e) {
+      // Cancelling the fingerprint prompt is not an error.
+      if (!e.toString().toLowerCase().contains('cancel')) {
+        setState(() => _error = 'تعذّر الدخول بالبصمة، استعمل كلمة السر');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _forgetBio() async {
+    await AuthService.disableBiometrics();
+    setState(() => _bioEmail = null);
+  }
+
   @override
   void dispose() {
     _email.dispose();
@@ -39,8 +91,12 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      await AuthService.signIn(_email.text.trim(), _password.text,
-          remember: _remember);
+      await AuthService.signIn(
+        _email.text.trim(),
+        _password.text,
+        remember: _remember,
+        enableBiometrics: _bioAvailable && _bioEmail == null && _useBio,
+      );
       // The router redirects to the right home screen automatically.
     } on AuthException catch (e) {
       setState(() => _error = _translate(e.message));
@@ -111,6 +167,27 @@ class _LoginScreenState extends State<LoginScreen> {
             Text('أدخل بريدك الإلكتروني وكلمة السر',
                 style: t.bodyMedium?.copyWith(color: AppColors.muted)),
             const SizedBox(height: 20),
+            if (_bioEmail != null) ...[
+              _BioButton(
+                email: _bioEmail!,
+                loading: _loading,
+                onTap: _bioLogin,
+                onForget: _forgetBio,
+              ),
+              const SizedBox(height: 18),
+              const Row(
+                children: [
+                  Expanded(child: Divider()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Text('أو بكلمة السر',
+                        style: TextStyle(color: AppColors.muted, fontSize: 13)),
+                  ),
+                  Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 14),
+            ],
             label('البريد الإلكتروني'),
             TextFormField(
               controller: _email,
@@ -176,6 +253,34 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
+            if (_bioAvailable && _bioEmail == null)
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => setState(() => _useBio = !_useBio),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Checkbox(
+                          value: _useBio,
+                          activeColor: AppColors.teal,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(5)),
+                          onChanged: (v) => setState(() => _useBio = v ?? true),
+                        ),
+                        const Text('تفعيل الدخول بالبصمة',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.fingerprint_rounded,
+                            color: AppColors.teal, size: 22),
+                      ],
+                    ),
+                  ),
+                ),
+              ).animate().fadeIn(duration: 300.ms),
             AnimatedSize(
               duration: 300.ms,
               curve: Curves.easeOutCubic,
@@ -234,6 +339,91 @@ class _LoginScreenState extends State<LoginScreen> {
     )
         .animate(delay: 150.ms)
         .slideY(begin: 1, end: 0, duration: 800.ms, curve: Curves.easeOutCubic);
+  }
+}
+
+/// Big fingerprint button shown when fingerprint login is enabled.
+class _BioButton extends StatelessWidget {
+  const _BioButton({
+    required this.email,
+    required this.loading,
+    required this.onTap,
+    required this.onForget,
+  });
+
+  final String email;
+  final bool loading;
+  final VoidCallback onTap;
+  final VoidCallback onForget;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Material(
+          color: AppColors.tealSoft,
+          borderRadius: BorderRadius.circular(22),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: loading ? null : onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: const BoxDecoration(
+                        color: AppColors.teal, shape: BoxShape.circle),
+                    child: const Icon(Icons.fingerprint_rounded,
+                        color: Colors.white, size: 34),
+                  )
+                      .animate(onPlay: (c) => c.repeat(reverse: true))
+                      .scaleXY(
+                          begin: 1,
+                          end: 1.08,
+                          duration: 1100.ms,
+                          curve: Curves.easeInOut),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('الدخول بالبصمة',
+                            style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.tealDark)),
+                        Text(email,
+                            textDirection: TextDirection.ltr,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 13, color: AppColors.muted)),
+                      ],
+                    ),
+                  ),
+                  if (loading)
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.5, color: AppColors.teal),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: TextButton(
+            onPressed: loading ? null : onForget,
+            child: const Text('إيقاف البصمة / حساب آخر',
+                style: TextStyle(fontSize: 13)),
+          ),
+        ),
+      ],
+    ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.15, end: 0);
   }
 }
 

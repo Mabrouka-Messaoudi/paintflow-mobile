@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -37,7 +39,7 @@ class AuthService {
   }
 
   static Future<void> signIn(String email, String password,
-      {bool remember = true}) async {
+      {bool remember = true, bool enableBiometrics = false}) async {
     _role = null;
     await _client.auth.signInWithPassword(email: email, password: password);
     await _prefs.setBool(_kRemember, remember);
@@ -46,11 +48,73 @@ class AuthService {
     } else {
       await _prefs.remove(_kEmail);
     }
+    if (enableBiometrics) {
+      // Encrypted with the Android Keystore / iOS Keychain.
+      await _secure.write(key: _kBioEmail, value: email);
+      await _secure.write(key: _kBioPassword, value: password);
+    }
   }
+
+  /// True right after the user pressed "logout" (no automatic fingerprint
+  /// prompt in that case, only on a fresh app start).
+  static bool justSignedOut = false;
 
   static Future<void> signOut() async {
     _role = null;
+    justSignedOut = true;
     await _client.auth.signOut();
+  }
+
+  // ---------- Fingerprint login ----------
+
+  static const _secure = FlutterSecureStorage();
+  static final _localAuth = LocalAuthentication();
+  static const _kBioEmail = 'bio_email';
+  static const _kBioPassword = 'bio_password';
+
+  /// The phone has a fingerprint (or other biometric) set up.
+  static Future<bool> biometricsAvailable() async {
+    try {
+      return await _localAuth.isDeviceSupported() &&
+          await _localAuth.canCheckBiometrics;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<String?> biometricEmail() async {
+    try {
+      return await _secure.read(key: _kBioEmail);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> disableBiometrics() async {
+    await _secure.delete(key: _kBioEmail);
+    await _secure.delete(key: _kBioPassword);
+  }
+
+  /// Asks for the fingerprint, then signs in with the saved credentials.
+  /// Returns false if the user cancelled.
+  static Future<bool> signInWithBiometrics() async {
+    final ok = await _localAuth.authenticate(
+      localizedReason: 'ضع إصبعك لتسجيل الدخول إلى PaintFlow',
+    );
+    if (!ok) return false;
+
+    final email = await _secure.read(key: _kBioEmail);
+    final password = await _secure.read(key: _kBioPassword);
+    if (email == null || password == null) return false;
+
+    try {
+      await signIn(email, password, remember: rememberMe);
+    } on AuthException {
+      // Password changed since it was saved: forget it.
+      await disableBiometrics();
+      rethrow;
+    }
+    return true;
   }
 }
 
