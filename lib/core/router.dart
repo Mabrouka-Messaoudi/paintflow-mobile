@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/client_summary.dart';
+import '../features/admin/admin_home_screen.dart';
 import '../features/admin/clients_screen.dart';
+import '../features/admin/finance_screen.dart';
 import '../features/project/project_screen.dart';
 import '../features/auth/auth_service.dart';
 import '../features/auth/login_screen.dart';
@@ -38,14 +40,24 @@ final appRouter = GoRouter(
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
     GoRoute(
       path: '/admin',
-      builder: (context, state) => const ClientsScreen(),
+      builder: (context, state) => const AdminHomeScreen(),
       routes: [
         GoRoute(
-          path: 'clients/:id',
-          builder: (context, state) => ProjectScreen(
-            clientId: state.pathParameters['id']!,
-            initial: state.extra as ClientSummary?,
-          ),
+          path: 'clients',
+          builder: (context, state) => const ClientsScreen(),
+          routes: [
+            GoRoute(
+              path: ':id',
+              builder: (context, state) => ProjectScreen(
+                clientId: state.pathParameters['id']!,
+                initial: state.extra as ClientSummary?,
+              ),
+            ),
+          ],
+        ),
+        GoRoute(
+          path: 'finance',
+          builder: (context, state) => const FinanceScreen(),
         ),
       ],
     ),

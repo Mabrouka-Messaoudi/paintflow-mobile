@@ -9,7 +9,6 @@ import '../../core/format.dart';
 import '../../core/widgets/ui.dart';
 import '../../data/client_summary.dart';
 import '../../data/clients_repository.dart';
-import '../auth/auth_service.dart';
 import 'add_client_sheet.dart';
 
 class ClientsScreen extends ConsumerStatefulWidget {
@@ -143,14 +142,20 @@ class _Header extends StatelessWidget {
         children: [
           Row(
             children: [
+              GlassIconButton(
+                icon: Icons.arrow_back_rounded,
+                tooltip: 'رجوع',
+                onPressed: () => context.pop(),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('مرحباً بك',
+                    Text('مكتبك',
                         style: GoogleFonts.ibmPlexSansArabic(
                             fontSize: 14, color: hint)),
-                    Text('حرفائي',
+                    Text('المشاريع',
                         style: GoogleFonts.cairo(
                             fontSize: 30,
                             fontWeight: FontWeight.w800,
@@ -172,11 +177,6 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              GlassIconButton(
-                icon: Icons.logout_rounded,
-                tooltip: 'تسجيل الخروج',
-                onPressed: AuthService.signOut,
-              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -189,7 +189,7 @@ class _Header extends StatelessWidget {
               cursorColor: AppColors.amber,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'ابحث عن حريف أو مكان…',
+                hintText: 'ابحث عن مشروع أو حريف أو مكان…',
                 hintStyle: const TextStyle(color: hint),
                 prefixIcon: const Icon(Icons.search_rounded, color: hint),
                 suffixIcon: value.text.isEmpty
